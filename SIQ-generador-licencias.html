@@ -1,0 +1,109 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIQ – Generador de licencias</title>
+<style>
+:root{--navy:#001529;--gold:#C9A227;--bg:#eef1f5;--card:#fff;--tx:#1c2733;--mut:#6b7785;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1623;--card:#13243a;--tx:#e8eef6;--mut:#93a4b8}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,Segoe UI,Arial,sans-serif;padding:20px}
+.w{max-width:680px;margin:auto}h1{font-size:20px;margin:0 0 4px;color:var(--gold)}.sub{color:var(--mut);margin-bottom:18px;font-size:12px}
+.c{background:var(--card);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+h2{font-size:13px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.06em}
+label{display:block;font-size:11px;font-weight:700;color:var(--mut);margin:10px 0 3px;text-transform:uppercase}
+input,textarea{width:100%;padding:10px;border:1px solid #9aa7b655;border-radius:9px;background:transparent;color:var(--tx);font:inherit}
+textarea{font-family:Consolas,monospace;font-size:12px;min-height:70px}
+button{background:var(--navy);color:#fff;border:2px solid var(--gold);border-radius:9px;padding:10px 16px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;margin-top:12px}
+button.g{background:var(--gold);color:var(--navy)}button:disabled{opacity:.4;cursor:not-allowed}
+button.s{padding:5px 10px;font-size:11px;margin:0}
+.st{font-size:12px;font-weight:700;margin-top:10px}.ok{color:#1a9b57}.er{color:#d33}.wn{background:#c9a22722;border-left:4px solid var(--gold);padding:8px 10px;font-size:12px;border-radius:6px;margin-top:10px}
+code{background:#8884;padding:1px 5px;border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}td,th{padding:7px 5px;border-bottom:1px solid #9aa7b633;text-align:left}
+.bq{color:#d33;font-weight:700}.av{color:#1a9b57;font-weight:700}
+.tb{overflow-x:auto}a{color:var(--gold)}
+</style></head><body><div class="w">
+<h1>SIQ · Generador de licencias</h1><div class="sub">Ábrelo con doble clic en tu navegador. Generar funciona sin internet.</div>
+
+<div class="c"><h2>1 · Tu llave de firmado</h2>
+<div id="k-sin">
+<label>Carga tu llave privada (siq-licencias-PRIVADA.json)</label><input type="file" id="f-priv" accept=".json">
+<button id="b-crear">Crear llaves nuevas (solo si nunca has creado)</button>
+<div class="wn">Si ya tienes llaves, NO crees nuevas: las licencias que ya entregaste dejarían de servir y tendrías que recompilar la app.</div></div>
+<div id="k-ok" hidden><div class="st ok">✔ Llave cargada · ID: <span id="k-id"></span></div>
+<button id="b-pub">Descargar de nuevo llave pública</button></div>
+<div class="st" id="k-msg"></div></div>
+
+<div class="c"><h2>2 · Nueva licencia</h2>
+<label>Cliente / razón social *</label><input id="cli" placeholder="Ej. Industrias del Bajío S.A. de C.V.">
+<button class="g" id="b-gen" disabled>Generar y descargar licencia</button>
+<div class="st" id="g-msg"></div>
+<div class="wn">Versión del sistema: <b id="v-txt"></b>. La licencia es permanente para esta versión y sirve para 1 empresa. Cuando saques una versión nueva, cambia el número aquí abajo y genérale otra al cliente que pague.</div>
+<label>Versión actual del sistema</label><input id="ver" type="number" min="1" style="max-width:120px">
+</div>
+
+<div class="c"><h2>3 · Licencias entregadas y bloqueo</h2>
+<div class="tb"><table><thead><tr><th>ID</th><th>Cliente</th><th>Ver.</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody id="tabla"></tbody></table></div>
+<div class="st" id="t-vacia" style="color:var(--mut)">Aún no has generado licencias en este navegador.</div>
+<label>Bloquear un ID que no esté en la tabla</label>
+<div style="display:flex;gap:8px"><input id="id-man" placeholder="LIC-XXXXXXXX"><button class="s" id="b-man" style="white-space:nowrap">Bloquear</button></div>
+<label>Contenido para bloqueadas.json</label>
+<textarea id="json" readonly></textarea>
+<button class="g" id="b-copiar">Copiar</button>
+<button id="b-git">Abrir bloqueadas.json en GitHub</button>
+<div class="wn">Para aplicar un bloqueo: dale a <b>Copiar</b>, luego a <b>Abrir en GitHub</b>, entra con el lápiz, borra todo, pega y da <b>Commit changes</b>. La app del cliente se bloquea en menos de 10 minutos si tiene internet. Para desbloquear, haz lo mismo después de darle a Desbloquear.</div>
+<div class="st" id="b-msg"></div>
+<button class="s" id="b-resp" style="margin-top:12px">Descargar respaldo de la lista</button>
+<label>Cargar respaldo de la lista</label><input type="file" id="f-resp" accept=".json">
+</div>
+</div>
+<script>
+/*CRYPTO-START*/
+const b64u=u=>{let t='';new Uint8Array(u).forEach(b=>t+=String.fromCharCode(b));return btoa(t).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const ALG={name:'ECDSA',namedCurve:'P-256'};
+async function idDe(x){return b64u((await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x))).slice(0,6))}
+async function crearPar(){const kp=await crypto.subtle.generateKey(ALG,true,['sign','verify']),j=await crypto.subtle.exportKey('jwk',kp.privateKey);
+ return{id_llave:await idDe(j.x),kty:j.kty,crv:j.crv,x:j.x,y:j.y,d:j.d}}
+const publica=k=>[{id_llave:k.id_llave,kty:k.kty,crv:k.crv,x:k.x,y:k.y}];
+async function firmar(k,datos){const pk=await crypto.subtle.importKey('jwk',{kty:k.kty,crv:k.crv,x:k.x,y:k.y,d:k.d},ALG,false,['sign']);
+ const s=await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},pk,new TextEncoder().encode(datos));
+ return{formato:'SIQ-LIC-1',id_llave:k.id_llave,datos,firma:b64u(s)}}
+/*CRYPTO-END*/
+const URL_GIT='https://github.com/carlosyaelbecerrasanchez120-cyber/siq-licencias/blob/main/bloqueadas.json';
+const $=s=>document.getElementById(s);let K=null;
+const guardar=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const leer=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+let REG=leer('SIQ_GEN_REGISTRO',[]);let VER=leer('SIQ_GEN_VERSION',5);
+const baja=(n,o)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(o,null,2)],{type:'application/json'}));a.download=n;a.click()};
+const msg=(id,t,c)=>{$(id).textContent=t;$(id).className='st '+(c||'')};
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function listo(k){K=k;$('k-sin').hidden=true;$('k-ok').hidden=false;$('k-id').textContent=k.id_llave;$('b-gen').disabled=false}
+function pintar(){
+ $('ver').value=VER;$('v-txt').textContent=VER;
+ $('t-vacia').hidden=REG.length>0;
+ $('tabla').innerHTML=REG.slice().reverse().map(r=>`<tr><td><code>${esc(r.id)}</code></td><td>${esc(r.cliente)}</td><td>${r.version}</td><td>${esc(r.fecha||'')}</td>
+ <td class="${r.bloqueada?'bq':'av'}">${r.bloqueada?'Bloqueada':'Activa'}</td>
+ <td><button class="s" data-id="${esc(r.id)}">${r.bloqueada?'Desbloquear':'Bloquear'}</button></td></tr>`).join('');
+ $('json').value=JSON.stringify({bloqueadas:REG.filter(r=>r.bloqueada).map(r=>r.id)});
+ document.querySelectorAll('#tabla button').forEach(b=>b.onclick=()=>{const r=REG.find(x=>x.id===b.dataset.id);r.bloqueada=!r.bloqueada;guardar('SIQ_GEN_REGISTRO',REG);pintar();
+  msg('b-msg',(r.bloqueada?'Marcada como bloqueada: ':'Desbloqueada: ')+r.id+'. Ahora copia y pega en GitHub para aplicarlo.','ok')});
+}
+$('ver').onchange=()=>{const v=parseInt($('ver').value,10);if(v>0){VER=v;guardar('SIQ_GEN_VERSION',VER)}pintar()};
+$('b-crear').onclick=async()=>{if(!confirm('¿Seguro? Solo hazlo si NUNCA has creado llaves. Si ya tienes, carga tu llave privada.'))return;
+ try{const k=await crearPar();baja('siq-licencias-PRIVADA.json',k);setTimeout(()=>baja('llave-licencia.json',publica(k)),400);listo(k);msg('k-msg','Guarda la llave PRIVADA en un lugar seguro. Copia llave-licencia.json a src/ del proyecto.','wn')}catch(e){msg('k-msg','No se pudieron crear las llaves: '+e.message,'er')}};
+$('f-priv').onchange=async e=>{try{const k=JSON.parse(await e.target.files[0].text());if(!k.d||!k.x||!k.y||!k.id_llave)throw 0;listo(k);msg('k-msg','')}catch(x){msg('k-msg','Ese archivo no es una llave privada válida.','er')}};
+$('b-pub').onclick=()=>baja('llave-licencia.json',publica(K));
+$('b-gen').onclick=async()=>{const cli=$('cli').value.trim();
+ if(!cli)return msg('g-msg','Escribe el nombre del cliente.','er');
+ const idb=crypto.getRandomValues(new Uint8Array(4)),id='LIC-'+[...idb].map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+ const fecha=new Date().toISOString().slice(0,10);
+ const d={id,cliente:cli,empresa:null,version_mayor:VER,max_empresas:1,emitida:fecha,nota:''};
+ try{const l=await firmar(K,JSON.stringify(d));baja('LICENCIA-'+cli.replace(/[^A-Za-z0-9]+/g,'_').slice(0,30)+'-v'+VER+'.siqlic',l);
+ REG.push({id,cliente:cli,version:VER,fecha,bloqueada:false});guardar('SIQ_GEN_REGISTRO',REG);pintar();$('cli').value='';
+ msg('g-msg','✔ Licencia '+id+' generada para '+cli+' (versión '+VER+').','ok')}catch(e){msg('g-msg','Error al firmar: '+e.message,'er')}};
+$('b-man').onclick=()=>{const id=$('id-man').value.trim().toUpperCase();if(!/^LIC-[0-9A-F]{8}$/.test(id))return msg('b-msg','El ID debe verse así: LIC-1A2B3C4D','er');
+ const r=REG.find(x=>x.id===id);if(r)r.bloqueada=true;else REG.push({id,cliente:'(sin registro)',version:'?',fecha:'',bloqueada:true});
+ guardar('SIQ_GEN_REGISTRO',REG);$('id-man').value='';pintar();msg('b-msg','Marcada como bloqueada: '+id+'. Ahora copia y pega en GitHub.','ok')};
+$('b-copiar').onclick=async()=>{try{await navigator.clipboard.writeText($('json').value);msg('b-msg','✔ Copiado. Pégalo en bloqueadas.json en GitHub.','ok')}catch(e){$('json').select();document.execCommand('copy');msg('b-msg','✔ Copiado.','ok')}};
+$('b-git').onclick=()=>window.open(URL_GIT,'_blank');
+$('b-resp').onclick=()=>baja('siq-registro-licencias.json',{version:VER,registro:REG});
+$('f-resp').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());if(!Array.isArray(j.registro))throw 0;REG=j.registro;if(j.version)VER=j.version;guardar('SIQ_GEN_REGISTRO',REG);guardar('SIQ_GEN_VERSION',VER);pintar();msg('b-msg','✔ Respaldo cargado.','ok')}catch(x){msg('b-msg','Ese archivo no es un respaldo válido.','er')}};
+pintar();
+</script></body></html>
